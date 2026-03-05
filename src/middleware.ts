@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 
+const secret = process.env.AUTH_SECRET;
+
 export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
 
@@ -13,7 +15,7 @@ export async function middleware(request: NextRequest) {
   ) {
     // If already logged in, redirect to dashboard (except API routes)
     if (!path.startsWith("/api")) {
-      const token = await getToken({ req: request });
+      const token = await getToken({ req: request, secret });
       if (token && !token.banned) {
         const url = request.nextUrl.clone();
         url.pathname = token.approved ? "/dashboard" : "/pending";
@@ -23,7 +25,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const token = await getToken({ req: request });
+  const token = await getToken({ req: request, secret });
 
   if (!token) {
     const url = request.nextUrl.clone();
