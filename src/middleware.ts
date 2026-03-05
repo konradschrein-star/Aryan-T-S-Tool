@@ -11,7 +11,8 @@ export async function middleware(request: NextRequest) {
     path === "/login" ||
     path === "/register" ||
     path.startsWith("/api/auth") ||
-    path === "/api/register"
+    path === "/api/register" ||
+    path === "/api/login"
   ) {
     // If already logged in, redirect to dashboard (except API routes)
     if (!path.startsWith("/api")) {

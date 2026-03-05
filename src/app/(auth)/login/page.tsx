@@ -3,7 +3,6 @@
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { loginAction } from "@/lib/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,18 +31,24 @@ function LoginForm() {
     setLoading(true);
 
     try {
-      const result = await loginAction(email, password);
+      const res = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
 
-      if (result.error) {
-        setError(result.error);
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Login failed");
         setLoading(false);
         return;
       }
 
-      // Hard redirect to force full page load (crosses layout boundaries)
+      // Cookie is set by the API response — do a hard redirect
       window.location.href = "/dashboard";
     } catch {
-      setError("An unexpected error occurred");
+      setError("Network error. Please try again.");
       setLoading(false);
     }
   }
