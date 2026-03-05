@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, useTransition } from "react";
+import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { loginAction } from "@/lib/actions/auth";
@@ -21,22 +21,31 @@ function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const [loading, setLoading] = useState(false);
 
   const errorParam = searchParams.get("error");
   const bannedError = errorParam === "banned";
 
-  function handleLogin(e: React.FormEvent) {
+  async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setLoading(true);
 
-    startTransition(async () => {
+    try {
       const result = await loginAction(email, password);
-      if (result?.error) {
+
+      if (result.error) {
         setError(result.error);
+        setLoading(false);
+        return;
       }
-      // On success, signIn throws a redirect which Next.js handles automatically
-    });
+
+      // Hard redirect to force full page load (crosses layout boundaries)
+      window.location.href = "/dashboard";
+    } catch {
+      setError("An unexpected error occurred");
+      setLoading(false);
+    }
   }
 
   return (
@@ -90,8 +99,8 @@ function LoginForm() {
           </div>
         </CardContent>
         <CardFooter className="flex flex-col gap-4">
-          <Button type="submit" className="w-full" disabled={isPending}>
-            {isPending ? "Signing in..." : "Sign In"}
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? "Signing in..." : "Sign In"}
           </Button>
           <p className="text-center text-sm text-muted-foreground">
             Don&apos;t have an account?{" "}
