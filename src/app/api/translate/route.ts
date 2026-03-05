@@ -1,17 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { auth } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { userSettings } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 import { translateScript } from "@/lib/ai/translate";
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
+    const session = await auth();
 
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -25,22 +23,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data: settings, error: settingsError } = await supabase
-      .from("user_settings")
-      .select("*")
-      .eq("user_id", user.id)
-      .single();
+    const [settings] = await db
+      .select()
+      .from(userSettings)
+      .where(eq(userSettings.userId, session.user.id))
+      .limit(1);
 
-    if (settingsError || !settings) {
+    if (!settings) {
       return NextResponse.json(
         { error: "User settings not found. Please configure your API keys in settings." },
         { status: 404 }
       );
     }
 
-    const provider = settings.preferred_provider as "xai" | "openai";
+    const provider = settings.preferredProvider as "xai" | "openai";
     const apiKey =
-      provider === "xai" ? settings.xai_api_key : settings.openai_api_key;
+      provider === "xai" ? settings.xaiApiKey : settings.openaiApiKey;
 
     if (!apiKey) {
       return NextResponse.json(

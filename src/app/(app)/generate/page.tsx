@@ -7,13 +7,13 @@ import {
   CheckCircle2,
   XCircle,
   Upload,
-  ImageIcon,
   X,
   Minus,
   Plus,
   Download,
 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { getSettings } from "@/lib/actions/settings";
+import { saveThumbnails } from "@/lib/actions/thumbnails";
 import { DEFAULT_THUMBNAIL_PROMPT } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,7 +39,6 @@ interface VariantProgress {
 }
 
 export default function GeneratePage() {
-  const supabase = createClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Settings
@@ -61,16 +60,7 @@ export default function GeneratePage() {
 
   const loadSettings = useCallback(async () => {
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data } = await supabase
-        .from("user_settings")
-        .select("*")
-        .eq("user_id", user.id)
-        .single();
+      const { data } = await getSettings();
 
       if (data) {
         setHasGoogleKey(!!data.google_api_key);
@@ -81,7 +71,7 @@ export default function GeneratePage() {
     } finally {
       setSettingsLoaded(true);
     }
-  }, [supabase]);
+  }, []);
 
   useEffect(() => {
     loadSettings();
@@ -134,13 +124,24 @@ export default function GeneratePage() {
     });
   }
 
+  async function fileToDataUrl(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
   async function handleGenerate() {
     if (!imageFile) {
       toast.error("Please upload an image first");
       return;
     }
     if (!hasGoogleKey) {
-      toast.error("No Google AI Studio API key configured. Please check Settings.");
+      toast.error(
+        "No Google AI Studio API key configured. Please check Settings."
+      );
       return;
     }
 
@@ -201,11 +202,11 @@ export default function GeneratePage() {
       (r) => r.status === "fulfilled"
     ).length;
     if (successCount === variantCount) {
-      toast.success(`${successCount} variant${successCount > 1 ? "s" : ""} generated!`);
-    } else if (successCount > 0) {
-      toast.warning(
-        `${successCount}/${variantCount} variants generated`
+      toast.success(
+        `${successCount} variant${successCount > 1 ? "s" : ""} generated!`
       );
+    } else if (successCount > 0) {
+      toast.warning(`${successCount}/${variantCount} variants generated`);
     } else {
       toast.error("All generations failed");
     }
@@ -222,68 +223,20 @@ export default function GeneratePage() {
     setSaving(true);
 
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
+      // Convert the original image file to a base64 data URL
+      const originalDataUrl = await fileToDataUrl(imageFile!);
 
-      // Upload original image to storage
-      const originalPath = `${user.id}/originals/${Date.now()}-${imageFile!.name}`;
-      const { error: uploadError } = await supabase.storage
-        .from("thumbnails")
-        .upload(originalPath, imageFile!, { contentType: imageFile!.type });
+      // Call the saveThumbnails server action
+      const { error } = await saveThumbnails({
+        originalDataUrl,
+        variants: successVariants.map((v) => ({
+          base64: v.base64!,
+          mimeType: v.mimeType!,
+          promptUsed: prompt,
+        })),
+      });
 
-      if (uploadError) throw new Error(`Failed to upload original image: ${uploadError.message}`);
-
-      const {
-        data: { publicUrl: originalUrl },
-      } = supabase.storage.from("thumbnails").getPublicUrl(originalPath);
-
-      // Create thumbnail row
-      const { data: thumbRow, error: thumbError } = await supabase
-        .from("thumbnails")
-        .insert({
-          user_id: user.id,
-          original_url: originalUrl,
-        })
-        .select("id")
-        .single();
-
-      if (thumbError || !thumbRow) throw thumbError ?? new Error("Failed to create thumbnail");
-
-      // Upload and insert each variant
-      for (const variant of successVariants) {
-        if (!variant.base64 || !variant.mimeType) continue;
-
-        // Convert base64 to blob
-        const byteChars = atob(variant.base64);
-        const byteArray = new Uint8Array(byteChars.length);
-        for (let i = 0; i < byteChars.length; i++) {
-          byteArray[i] = byteChars.charCodeAt(i);
-        }
-        const ext = variant.mimeType.split("/")[1] || "png";
-        const blob = new Blob([byteArray], { type: variant.mimeType });
-
-        const variantPath = `${user.id}/variants/${Date.now()}-${variant.index}.${ext}`;
-        const { error: varUploadError } = await supabase.storage
-          .from("thumbnails")
-          .upload(variantPath, blob, { contentType: variant.mimeType });
-
-        if (varUploadError) {
-          toast.error(`Failed to upload variant ${variant.index + 1}: ${varUploadError.message}`);
-          continue;
-        }
-
-        const {
-          data: { publicUrl: variantUrl },
-        } = supabase.storage.from("thumbnails").getPublicUrl(variantPath);
-
-        await supabase.from("thumbnail_variants").insert({
-          thumbnail_id: thumbRow.id,
-          variant_url: variantUrl,
-          prompt_used: prompt,
-        });
-      }
+      if (error) throw new Error(error);
 
       toast.success("All variants saved!");
       setSaved(true);
@@ -436,9 +389,7 @@ export default function GeneratePage() {
               >
                 <Plus className="size-4" />
               </Button>
-              <span className="text-xs text-muted-foreground">
-                (1-10)
-              </span>
+              <span className="text-xs text-muted-foreground">(1-10)</span>
             </div>
           </div>
 
@@ -468,26 +419,27 @@ export default function GeneratePage() {
       </Button>
 
       {/* Progress Indicators */}
-      {variants.length > 0 && variants.some((v) => v.status !== "done" || !v.imageUrl) && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Progress</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
-              {variants.map((v) => (
-                <div
-                  key={v.index}
-                  className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm"
-                >
-                  <span>Variant {v.index + 1}</span>
-                  <StatusIcon status={v.status} />
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {variants.length > 0 &&
+        variants.some((v) => v.status !== "done" || !v.imageUrl) && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Progress</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
+                {variants.map((v) => (
+                  <div
+                    key={v.index}
+                    className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm"
+                  >
+                    <span>Variant {v.index + 1}</span>
+                    <StatusIcon status={v.status} />
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
       {/* Results Grid */}
       {successVariants.length > 0 && (

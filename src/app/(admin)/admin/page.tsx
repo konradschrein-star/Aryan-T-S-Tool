@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { Script, Thumbnail } from "@/types";
 import { ScriptTable } from "@/components/script-table";
 import { ThumbnailTable } from "@/components/thumbnail-table";
@@ -10,6 +9,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RefreshCw, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { DEFAULT_LANGUAGE_CODES } from "@/lib/constants";
+import { getAdminScripts } from "@/lib/actions/scripts";
+import { getAdminThumbnails } from "@/lib/actions/thumbnails";
+import { getSettings } from "@/lib/actions/settings";
 
 export default function AdminContentPage() {
   const [scripts, setScripts] = useState<Script[]>([]);
@@ -17,37 +19,29 @@ export default function AdminContentPage() {
   const [defaultLanguages, setDefaultLanguages] = useState<string[]>(DEFAULT_LANGUAGE_CODES);
   const [loading, setLoading] = useState(true);
 
-  const supabase = createClient();
-
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const [scriptsResult, thumbnailsResult, settingsResult] =
         await Promise.all([
-          supabase
-            .from("scripts")
-            .select("*, translations:script_translations(*), profile:profiles!scripts_user_id_fkey(*)")
-            .order("created_at", { ascending: false }),
-          supabase
-            .from("thumbnails")
-            .select("*, variants:thumbnail_variants(*), profile:profiles!thumbnails_user_id_fkey(*)")
-            .order("created_at", { ascending: false }),
-          supabase.from("user_settings").select("default_languages").single(),
+          getAdminScripts(),
+          getAdminThumbnails(),
+          getSettings(),
         ]);
 
       if (scriptsResult.error) {
         toast.error("Failed to load scripts");
       } else {
-        setScripts(scriptsResult.data ?? []);
+        setScripts(scriptsResult.data as Script[]);
       }
       if (thumbnailsResult.error) {
         toast.error("Failed to load thumbnails");
       } else {
-        setThumbnails(thumbnailsResult.data ?? []);
+        setThumbnails(thumbnailsResult.data as Thumbnail[]);
       }
       if (settingsResult.error) {
         console.warn("Failed to load language settings, using defaults");
-      } else if (settingsResult.data?.default_languages) {
+      } else if (settingsResult.data?.default_languages?.length) {
         setDefaultLanguages(settingsResult.data.default_languages);
       }
     } catch {
@@ -55,7 +49,7 @@ export default function AdminContentPage() {
     } finally {
       setLoading(false);
     }
-  }, [supabase]);
+  }, []);
 
   useEffect(() => {
     fetchData();

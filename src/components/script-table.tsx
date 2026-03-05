@@ -27,7 +27,7 @@ import {
   Check,
 } from "lucide-react";
 import { toast } from "sonner";
-import { createClient } from "@/lib/supabase/client";
+import { deleteScripts as deleteScriptsAction } from "@/lib/actions/scripts";
 import { Script, ScriptTranslation } from "@/types";
 import { ALL_LANGUAGES } from "@/lib/constants";
 import { ScriptPopup } from "./script-popup";
@@ -45,7 +45,6 @@ export function ScriptTable({
   isAdmin = false,
   onRefresh,
 }: ScriptTableProps) {
-  const supabase = createClient();
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [selectedCols, setSelectedCols] = useState<Set<string>>(new Set());
   const [hiddenCols, setHiddenCols] = useState<Set<string>>(new Set());
@@ -125,18 +124,15 @@ export function ScriptTable({
     []
   );
 
-  const deleteScripts = async (ids: string[]) => {
+  const handleDeleteScripts = async (ids: string[]) => {
     const count = ids.length;
     const confirmed = window.confirm(
       `Are you sure you want to delete ${count} script${count > 1 ? "s" : ""}? This action cannot be undone.`
     );
     if (!confirmed) return;
 
-    const { error } = await supabase
-      .from("scripts")
-      .delete()
-      .in("id", ids);
-    if (error) {
+    const result = await deleteScriptsAction(ids);
+    if (result.error) {
       toast.error("Failed to delete");
     } else {
       toast.success(`Deleted ${ids.length} script(s)`);
@@ -182,7 +178,7 @@ export function ScriptTable({
   const deleteSelected = () => {
     const ids = Array.from(selectedRows);
     if (ids.length === 0) return;
-    deleteScripts(ids);
+    handleDeleteScripts(ids);
   };
 
   const openPopup = (
@@ -207,88 +203,43 @@ export function ScriptTable({
     <div className="space-y-3">
       {/* Bulk actions */}
       <div className="flex items-center gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={downloadSelected}
-          disabled={selectedRows.size === 0}
-        >
-          <Download className="h-4 w-4 mr-1" />
-          Download Selected
+        <Button variant="outline" size="sm" onClick={downloadSelected} disabled={selectedRows.size === 0}>
+          <Download className="h-4 w-4 mr-1" /> Download Selected
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={copySelected}
-          disabled={selectedRows.size === 0}
-        >
-          <Copy className="h-4 w-4 mr-1" />
-          Copy Selected
+        <Button variant="outline" size="sm" onClick={copySelected} disabled={selectedRows.size === 0}>
+          <Copy className="h-4 w-4 mr-1" /> Copy Selected
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={deleteSelected}
-          disabled={selectedRows.size === 0}
-          className="text-destructive hover:text-destructive"
-        >
-          <Trash2 className="h-4 w-4 mr-1" />
-          Delete Selected
+        <Button variant="outline" size="sm" onClick={deleteSelected} disabled={selectedRows.size === 0} className="text-destructive hover:text-destructive">
+          <Trash2 className="h-4 w-4 mr-1" /> Delete Selected
         </Button>
-        {selectedRows.size > 0 && (
-          <Badge variant="secondary">{selectedRows.size} selected</Badge>
-        )}
-
-        {/* Column toggles */}
+        {selectedRows.size > 0 && <Badge variant="secondary">{selectedRows.size} selected</Badge>}
         <div className="ml-auto flex items-center gap-1">
           {allLanguages.map((lang) => (
             <Tooltip key={lang.code}>
               <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 px-2 text-xs"
-                  onClick={() => toggleColVisibility(lang.code)}
-                  aria-label={`${hiddenCols.has(lang.code) ? "Show" : "Hide"} ${lang.name} column`}
-                >
-                  {hiddenCols.has(lang.code) ? (
-                    <EyeOff className="h-3 w-3 mr-1 opacity-50" />
-                  ) : (
-                    <Eye className="h-3 w-3 mr-1" />
-                  )}
+                <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => toggleColVisibility(lang.code)} aria-label={`${hiddenCols.has(lang.code) ? "Show" : "Hide"} ${lang.name} column`}>
+                  {hiddenCols.has(lang.code) ? <EyeOff className="h-3 w-3 mr-1 opacity-50" /> : <Eye className="h-3 w-3 mr-1" />}
                   {lang.code.toUpperCase()}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>
-                {hiddenCols.has(lang.code) ? "Show" : "Hide"} {lang.name}
-              </TooltipContent>
+              <TooltipContent>{hiddenCols.has(lang.code) ? "Show" : "Hide"} {lang.name}</TooltipContent>
             </Tooltip>
           ))}
         </div>
       </div>
 
-      {/* Table */}
       <div className="border rounded-lg overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow className="border-b border-border/50">
-              <TableHead className="w-10">
-                <Checkbox
-                  checked={allSelected}
-                  onCheckedChange={toggleAllRows}
-                />
-              </TableHead>
+              <TableHead className="w-10"><Checkbox checked={allSelected} onCheckedChange={toggleAllRows} /></TableHead>
               <TableHead className="min-w-[120px]">Original</TableHead>
               {isAdmin && <TableHead className="min-w-[100px]">User</TableHead>}
               {languages.map((lang) => (
                 <TableHead key={lang.code} className="min-w-[120px]">
                   <div className="flex items-center gap-1">
                     {lang.name}
-                    <Checkbox
-                      checked={selectedCols.has(lang.code)}
-                      onCheckedChange={() => toggleCol(lang.code)}
-                      className="ml-auto h-3 w-3"
-                    />
+                    <Checkbox checked={selectedCols.has(lang.code)} onCheckedChange={() => toggleCol(lang.code)} className="ml-auto h-3 w-3" />
                   </div>
                 </TableHead>
               ))}
@@ -300,135 +251,55 @@ export function ScriptTable({
           <TableBody>
             {scripts.length === 0 && (
               <TableRow>
-                <TableCell
-                  colSpan={languages.length + (isAdmin ? 6 : 5)}
-                  className="text-center text-muted-foreground py-12"
-                >
+                <TableCell colSpan={languages.length + (isAdmin ? 6 : 5)} className="text-center text-muted-foreground py-12">
                   No scripts yet.{" "}
-                  <Link href="/translate" className="text-primary underline underline-offset-4 hover:text-primary/80">
-                    Go to Translate
-                  </Link>{" "}
+                  <Link href="/translate" className="text-primary underline underline-offset-4 hover:text-primary/80">Go to Translate</Link>{" "}
                   to create one.
                 </TableCell>
               </TableRow>
             )}
             {scripts.map((script) => (
               <TableRow key={script.id} className="border-b border-border/30">
+                <TableCell><Checkbox checked={selectedRows.has(script.id)} onCheckedChange={() => toggleRow(script.id)} /></TableCell>
                 <TableCell>
-                  <Checkbox
-                    checked={selectedRows.has(script.id)}
-                    onCheckedChange={() => toggleRow(script.id)}
-                  />
-                </TableCell>
-                <TableCell>
-                  <div
-                    className="group relative cursor-pointer rounded-md bg-muted/50 px-3 py-2 hover:bg-muted transition-colors"
-                    onClick={() =>
-                      openPopup(
-                        "Original Script",
-                        script.original_text,
-                        undefined,
-                        false
-                      )
-                    }
-                  >
-                    <span className="line-clamp-2 text-sm">
-                      {script.original_text.slice(0, 80)}...
-                    </span>
-                    <button
-                      aria-label="Copy original text"
-                      className="absolute right-1 top-1 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-background"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        copyCell(script.original_text, `orig-${script.id}`);
-                      }}
-                    >
-                      {copiedCell === `orig-${script.id}` ? (
-                        <Check className="h-3.5 w-3.5 text-green-500" />
-                      ) : (
-                        <Copy className="h-3.5 w-3.5" />
-                      )}
+                  <div className="group relative cursor-pointer rounded-md bg-muted/50 px-3 py-2 hover:bg-muted transition-colors" onClick={() => openPopup("Original Script", script.original_text, undefined, false)}>
+                    <span className="line-clamp-2 text-sm">{script.original_text.slice(0, 80)}...</span>
+                    <button aria-label="Copy original text" className="absolute right-1 top-1 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-background" onClick={(e) => { e.stopPropagation(); copyCell(script.original_text, `orig-${script.id}`); }}>
+                      {copiedCell === `orig-${script.id}` ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
                     </button>
                   </div>
                 </TableCell>
-                {isAdmin && (
-                  <TableCell className="text-sm text-muted-foreground">
-                    {script.profile?.display_name || script.profile?.email}
-                  </TableCell>
-                )}
+                {isAdmin && <TableCell className="text-sm text-muted-foreground">{script.profile?.display_name || script.profile?.email}</TableCell>}
                 {languages.map((lang) => {
                   const tr = getTranslation(script, lang.code);
                   const cellId = `${script.id}-${lang.code}`;
                   return (
                     <TableCell key={lang.code}>
                       {tr ? (
-                        <div
-                          className="group relative cursor-pointer rounded-md bg-muted/50 px-3 py-2 hover:bg-muted transition-colors"
-                          onClick={() =>
-                            openPopup(
-                              `${lang.name} Translation`,
-                              tr.translated_text,
-                              tr.id,
-                              true
-                            )
-                          }
-                        >
-                          <span className="line-clamp-2 text-sm">
-                            {tr.translated_text.slice(0, 80)}...
-                          </span>
+                        <div className="group relative cursor-pointer rounded-md bg-muted/50 px-3 py-2 hover:bg-muted transition-colors" onClick={() => openPopup(`${lang.name} Translation`, tr.translated_text, tr.id, true)}>
+                          <span className="line-clamp-2 text-sm">{tr.translated_text.slice(0, 80)}...</span>
                           <div className="absolute right-1 top-1 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <span className="text-[10px] text-muted-foreground mr-1">
-                              {tr.word_count}w
-                            </span>
-                            <button
-                              aria-label={`Copy ${lang.name} translation`}
-                              className="p-1 rounded hover:bg-background"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                copyCell(tr.translated_text, cellId);
-                              }}
-                            >
-                              {copiedCell === cellId ? (
-                                <Check className="h-3.5 w-3.5 text-green-500" />
-                              ) : (
-                                <Copy className="h-3.5 w-3.5" />
-                              )}
+                            <span className="text-[10px] text-muted-foreground mr-1">{tr.word_count}w</span>
+                            <button aria-label={`Copy ${lang.name} translation`} className="p-1 rounded hover:bg-background" onClick={(e) => { e.stopPropagation(); copyCell(tr.translated_text, cellId); }}>
+                              {copiedCell === cellId ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
                             </button>
                           </div>
                         </div>
-                      ) : (
-                        <span className="text-xs text-muted-foreground/50">
-                          —
-                        </span>
-                      )}
+                      ) : <span className="text-xs text-muted-foreground/50">—</span>}
                     </TableCell>
                   );
                 })}
                 <TableCell>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                    onClick={() => deleteScripts([script.id])}
-                    aria-label="Delete script"
-                  >
+                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-destructive hover:text-destructive" onClick={() => handleDeleteScripts([script.id])} aria-label="Delete script">
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </TableCell>
                 <TableCell>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 w-8 p-0"
-                    onClick={() => downloadTranslations(script)}
-                    aria-label="Download translations"
-                  >
+                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => downloadTranslations(script)} aria-label="Download translations">
                     <Download className="h-4 w-4" />
                   </Button>
                 </TableCell>
-                <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                  {formatDate(script.created_at)}
-                </TableCell>
+                <TableCell className="text-sm text-muted-foreground whitespace-nowrap">{formatDate(script.created_at)}</TableCell>
               </TableRow>
             ))}
           </TableBody>

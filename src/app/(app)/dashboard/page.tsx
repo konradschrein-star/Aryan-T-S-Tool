@@ -1,41 +1,37 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
-import { Script, UserSettings } from "@/types";
+import { Script } from "@/types";
 import { ScriptTable } from "@/components/script-table";
 import { Button } from "@/components/ui/button";
 import { RefreshCw, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { DEFAULT_LANGUAGE_CODES } from "@/lib/constants";
+import { getScripts } from "@/lib/actions/scripts";
+import { getSettings } from "@/lib/actions/settings";
 
 export default function DashboardPage() {
   const [scripts, setScripts] = useState<Script[]>([]);
   const [visibleLanguages, setVisibleLanguages] = useState<string[]>(DEFAULT_LANGUAGE_CODES);
   const [loading, setLoading] = useState(true);
 
-  const supabase = createClient();
-
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const [scriptsResult, settingsResult] = await Promise.all([
-        supabase
-          .from("scripts")
-          .select("*, translations:script_translations(*)")
-          .order("created_at", { ascending: false }),
-        supabase.from("user_settings").select("default_languages").single(),
+        getScripts(),
+        getSettings(),
       ]);
 
       if (scriptsResult.error) {
         toast.error("Failed to load scripts");
       } else {
-        setScripts(scriptsResult.data ?? []);
+        setScripts(scriptsResult.data as Script[]);
       }
 
       if (settingsResult.error) {
         console.warn("Failed to load language settings, using defaults");
-      } else if (settingsResult.data?.default_languages) {
+      } else if (settingsResult.data?.default_languages?.length) {
         setVisibleLanguages(settingsResult.data.default_languages);
       }
     } catch {
@@ -43,7 +39,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [supabase]);
+  }, []);
 
   useEffect(() => {
     fetchData();

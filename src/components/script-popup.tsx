@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Copy, Download, Save, Check } from "lucide-react";
 import { toast } from "sonner";
-import { createClient } from "@/lib/supabase/client";
+import { updateTranslation } from "@/lib/actions/translations";
 
 interface ScriptPopupProps {
   open: boolean;
@@ -35,7 +35,6 @@ export function ScriptPopup({
   const [text, setText] = useState(content);
   const [copied, setCopied] = useState(false);
   const [saving, setSaving] = useState(false);
-  const supabase = createClient();
 
   const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
 
@@ -61,12 +60,9 @@ export function ScriptPopup({
     if (!translationId) return;
     setSaving(true);
     const wc = text.trim().split(/\s+/).filter(Boolean).length;
-    const { error } = await supabase
-      .from("script_translations")
-      .update({ translated_text: text, word_count: wc })
-      .eq("id", translationId);
+    const result = await updateTranslation(translationId, text, wc);
     setSaving(false);
-    if (error) {
+    if (result.error) {
       toast.error("Failed to save");
     } else {
       toast.success("Saved");

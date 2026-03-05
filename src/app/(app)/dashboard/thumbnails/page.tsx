@@ -1,38 +1,32 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { Thumbnail } from "@/types";
 import { ThumbnailTable } from "@/components/thumbnail-table";
 import { Button } from "@/components/ui/button";
 import { RefreshCw, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { getThumbnails } from "@/lib/actions/thumbnails";
 
 export default function ThumbnailsPage() {
   const [thumbnails, setThumbnails] = useState<Thumbnail[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const supabase = createClient();
-
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from("thumbnails")
-        .select("*, variants:thumbnail_variants(*)")
-        .order("created_at", { ascending: false });
-
-      if (error) {
+      const result = await getThumbnails();
+      if (result.error) {
         toast.error("Failed to load thumbnails");
       } else {
-        setThumbnails(data ?? []);
+        setThumbnails(result.data as Thumbnail[]);
       }
     } catch {
       toast.error("Failed to load data");
     } finally {
       setLoading(false);
     }
-  }, [supabase]);
+  }, []);
 
   useEffect(() => {
     fetchData();

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -17,30 +17,9 @@ export default function PendingPage() {
   const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
-    const supabase = createClient();
-
-    const interval = setInterval(async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) return;
-
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("approved")
-        .eq("id", user.id)
-        .single();
-
-      if (profileError) {
-        console.warn("Failed to check approval status:", profileError.message);
-        return;
-      }
-
-      if (profile?.approved) {
-        router.push("/dashboard");
-        router.refresh();
-      }
+    // Poll by refreshing the page — middleware will redirect to /dashboard once approved
+    const interval = setInterval(() => {
+      router.refresh();
     }, 5000);
 
     return () => clearInterval(interval);
@@ -48,10 +27,7 @@ export default function PendingPage() {
 
   async function handleLogout() {
     setLoggingOut(true);
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
+    await signOut({ callbackUrl: "/login" });
   }
 
   return (

@@ -11,7 +11,8 @@ import {
   X,
   RotateCcw,
 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { getSettings } from "@/lib/actions/settings";
+import { createScript, insertTranslation } from "@/lib/actions/scripts";
 import {
   ALL_LANGUAGES,
   DEFAULT_LANGUAGE_CODES,
@@ -51,7 +52,6 @@ interface BatchFileProgress {
 }
 
 export default function TranslatePage() {
-  const supabase = createClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Settings state
@@ -80,16 +80,7 @@ export default function TranslatePage() {
 
   const loadSettings = useCallback(async () => {
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data } = await supabase
-        .from("user_settings")
-        .select("*")
-        .eq("user_id", user.id)
-        .single();
+      const { data } = await getSettings();
 
       if (data) {
         if (data.auto_fill_languages && data.default_languages.length > 0) {
@@ -107,7 +98,7 @@ export default function TranslatePage() {
     } finally {
       setSettingsLoaded(true);
     }
-  }, [supabase]);
+  }, []);
 
   useEffect(() => {
     loadSettings();
@@ -165,23 +156,21 @@ export default function TranslatePage() {
 
         const { translatedText } = await res.json();
 
-        // Save translation to DB
+        // Save translation to DB via server action
         const wordCount = translatedText
           .split(/\s+/)
           .filter(Boolean).length;
 
-        const { error: insertError } = await supabase
-          .from("script_translations")
-          .insert({
-            script_id: scriptId,
-            language_code: lang.code,
-            language_name: lang.name,
-            translated_text: translatedText,
-            word_count: wordCount,
-          });
+        const { error: insertError } = await insertTranslation({
+          scriptId,
+          languageCode: lang.code,
+          languageName: lang.name,
+          translatedText,
+          wordCount,
+        });
 
         if (insertError) {
-          throw new Error(`Saved translation failed: ${insertError.message}`);
+          throw new Error(`Saved translation failed: ${insertError}`);
         }
 
         setSingleProgress((prev) =>
@@ -232,23 +221,15 @@ export default function TranslatePage() {
     });
 
     try {
-      // 1. Create script row
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
+      // 1. Create script row via server action
+      const { data: scriptRow, error: scriptError } = await createScript(
+        singleText.trim(),
+        null
+      );
 
-      const { data: scriptRow, error: scriptError } = await supabase
-        .from("scripts")
-        .insert({
-          user_id: user.id,
-          original_text: singleText.trim(),
-          original_filename: null,
-        })
-        .select("id")
-        .single();
-
-      if (scriptError || !scriptRow) throw scriptError ?? new Error("Failed to create script");
+      if (scriptError || !scriptRow) {
+        throw new Error(scriptError ?? "Failed to create script");
+      }
 
       setSingleScriptId(scriptRow.id);
 
@@ -377,28 +358,18 @@ export default function TranslatePage() {
     setBatchProgress(initialBatchProg);
 
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
-
       // Process each file
       for (let fi = 0; fi < batchFiles.length; fi++) {
         const file = batchFiles[fi];
 
-        // Create script row
-        const { data: scriptRow, error: scriptError } = await supabase
-          .from("scripts")
-          .insert({
-            user_id: user.id,
-            original_text: file.text.trim(),
-            original_filename: file.name,
-          })
-          .select("id")
-          .single();
+        // Create script row via server action
+        const { data: scriptRow, error: scriptError } = await createScript(
+          file.text.trim(),
+          file.name
+        );
 
         if (scriptError || !scriptRow) {
-          toast.error(`Failed to create script for ${file.name}: ${scriptError?.message ?? "Unknown error"}`);
+          toast.error(`Failed to create script for ${file.name}: ${scriptError ?? "Unknown error"}`);
           setBatchProgress((prev) =>
             prev.map((fp, i) =>
               i === fi
@@ -454,18 +425,17 @@ export default function TranslatePage() {
               .split(/\s+/)
               .filter(Boolean).length;
 
-            const { error: insertError } = await supabase
-              .from("script_translations")
-              .insert({
-                script_id: scriptRow.id,
-                language_code: lang.code,
-                language_name: lang.name,
-                translated_text: translatedText,
-                word_count: wordCount,
-              });
+            // Save translation to DB via server action
+            const { error: insertError } = await insertTranslation({
+              scriptId: scriptRow.id,
+              languageCode: lang.code,
+              languageName: lang.name,
+              translatedText,
+              wordCount,
+            });
 
             if (insertError) {
-              throw new Error(`Save failed: ${insertError.message}`);
+              throw new Error(`Save failed: ${insertError}`);
             }
 
             setBatchProgress((prev) =>

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
   FileText,
   Image,
@@ -11,7 +11,7 @@ import {
   Shield,
   LogOut,
 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { signOut } from "next-auth/react";
 import { Profile } from "@/types";
 import { cn } from "@/lib/utils";
 import {
@@ -30,12 +30,9 @@ const navItems = [
 
 export function AppSidebar({ profile }: { profile: Profile }) {
   const pathname = usePathname();
-  const router = useRouter();
 
   async function handleLogout() {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/login");
+    await signOut({ callbackUrl: "/login" });
   }
 
   return (

@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { Profile } from "@/types";
+import { auth } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { users } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 import { AppSidebar } from "@/components/app-sidebar";
 
 export default async function AdminLayout({
@@ -8,29 +10,35 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
+  const session = await auth();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  if (!session?.user?.id) {
     redirect("/login");
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", user.id)
-    .single<Profile>();
+  const [profile] = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, session.user.id))
+    .limit(1);
 
   if (!profile || profile.role !== "owner") {
     redirect("/dashboard");
   }
 
+  const profileData = {
+    id: profile.id,
+    email: profile.email,
+    display_name: profile.displayName,
+    role: profile.role as "owner" | "va",
+    approved: profile.approved,
+    banned: profile.banned,
+    created_at: profile.createdAt.toISOString(),
+  };
+
   return (
     <div className="flex h-screen overflow-hidden">
-      <AppSidebar profile={profile} />
+      <AppSidebar profile={profileData} />
       <main className="flex-1 overflow-y-auto p-6">{children}</main>
     </div>
   );
