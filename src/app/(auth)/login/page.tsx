@@ -3,7 +3,7 @@
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { signIn } from "next-auth/react";
+import { loginAction } from "@/lib/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,21 +33,19 @@ function LoginForm() {
     setLoading(true);
 
     try {
-      const result = await signIn("credentials", {
-        email,
-        password,
-        redirect: false,
-      });
+      const result = await loginAction(email, password);
 
       if (result?.error) {
-        setError("Invalid email or password");
+        setError(result.error);
         return;
       }
 
       router.push("/dashboard");
       router.refresh();
     } catch {
-      setError("An unexpected error occurred. Please try again.");
+      // NEXT_REDIRECT throws — this is expected on successful login
+      router.push("/dashboard");
+      router.refresh();
     } finally {
       setLoading(false);
     }
