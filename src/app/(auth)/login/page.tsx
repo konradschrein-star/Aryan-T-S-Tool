@@ -1,7 +1,7 @@
 "use client";
 
-import { Suspense, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState, useTransition } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { loginAction } from "@/lib/actions/auth";
 import { Button } from "@/components/ui/button";
@@ -17,38 +17,26 @@ import {
 } from "@/components/ui/card";
 
 function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [isPending, startTransition] = useTransition();
 
   const errorParam = searchParams.get("error");
   const bannedError = errorParam === "banned";
 
-  async function handleLogin(e: React.FormEvent) {
+  function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    setLoading(true);
 
-    try {
+    startTransition(async () => {
       const result = await loginAction(email, password);
-
       if (result?.error) {
         setError(result.error);
-        return;
       }
-
-      router.push("/dashboard");
-      router.refresh();
-    } catch {
-      // NEXT_REDIRECT throws — this is expected on successful login
-      router.push("/dashboard");
-      router.refresh();
-    } finally {
-      setLoading(false);
-    }
+      // On success, signIn throws a redirect which Next.js handles automatically
+    });
   }
 
   return (
@@ -102,8 +90,8 @@ function LoginForm() {
           </div>
         </CardContent>
         <CardFooter className="flex flex-col gap-4">
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? "Signing in..." : "Sign In"}
+          <Button type="submit" className="w-full" disabled={isPending}>
+            {isPending ? "Signing in..." : "Sign In"}
           </Button>
           <p className="text-center text-sm text-muted-foreground">
             Don&apos;t have an account?{" "}

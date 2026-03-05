@@ -8,15 +8,13 @@ export async function loginAction(email: string, password: string) {
     await signIn("credentials", {
       email,
       password,
-      redirect: false,
+      redirectTo: "/dashboard",
     });
-    return { success: true };
   } catch (error) {
     if (error instanceof AuthError) {
       return { error: "Invalid email or password" };
     }
-    // signIn throws a NEXT_REDIRECT error on success in some versions
-    // Re-throw it so Next.js can handle the redirect
+    // NextAuth v5 throws a NEXT_REDIRECT on success — re-throw so Next.js handles it
     throw error;
   }
 }
