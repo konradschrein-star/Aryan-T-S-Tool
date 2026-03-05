@@ -18,6 +18,13 @@ export async function getSettings() {
 
     if (!settings) return { data: null, error: null };
 
+    let presets = [];
+    try {
+      presets = JSON.parse(settings.languagePresets || "[]");
+    } catch {
+      presets = [];
+    }
+
     return {
       data: {
         user_id: settings.userId,
@@ -29,6 +36,8 @@ export async function getSettings() {
         auto_fill_languages: settings.autoFillLanguages,
         script_prompt: settings.scriptPrompt ?? "",
         thumbnail_prompt: settings.thumbnailPrompt ?? "",
+        custom_languages: settings.customLanguages ?? [],
+        language_presets: presets,
       },
       error: null,
     };
@@ -46,6 +55,8 @@ export async function saveSettings(data: {
   autoFillLanguages: boolean;
   scriptPrompt: string;
   thumbnailPrompt: string;
+  customLanguages?: string[];
+  languagePresets?: { id: string; name: string; languages: string[] }[];
 }) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Not authenticated" };
@@ -67,6 +78,8 @@ export async function saveSettings(data: {
       autoFillLanguages: data.autoFillLanguages,
       scriptPrompt: data.scriptPrompt,
       thumbnailPrompt: data.thumbnailPrompt,
+      customLanguages: data.customLanguages ?? [],
+      languagePresets: JSON.stringify(data.languagePresets ?? []),
     };
 
     if (existing) {

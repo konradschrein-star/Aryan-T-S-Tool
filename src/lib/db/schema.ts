@@ -33,6 +33,11 @@ export const userSettings = pgTable("user_settings", {
   autoFillLanguages: boolean("auto_fill_languages").default(true).notNull(),
   scriptPrompt: text("script_prompt"),
   thumbnailPrompt: text("thumbnail_prompt"),
+  customLanguages: text("custom_languages")
+    .array()
+    .default([])
+    .notNull(),
+  languagePresets: text("language_presets").default("[]").notNull(),
 });
 
 export const scripts = pgTable("scripts", {

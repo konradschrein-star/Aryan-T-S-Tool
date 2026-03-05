@@ -15,9 +15,9 @@ import { getSettings } from "@/lib/actions/settings";
 import { createScript, insertTranslation } from "@/lib/actions/scripts";
 import {
   ALL_LANGUAGES,
-  DEFAULT_LANGUAGE_CODES,
   DEFAULT_SCRIPT_PROMPT,
 } from "@/lib/constants";
+import { LanguagePreset } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -56,11 +56,11 @@ export default function TranslatePage() {
 
   // Settings state
   const [settingsLoaded, setSettingsLoaded] = useState(false);
-  const [selectedLanguages, setSelectedLanguages] = useState<string[]>(
-    DEFAULT_LANGUAGE_CODES
-  );
+  const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
   const [hasApiKey, setHasApiKey] = useState(false);
   const [scriptPrompt, setScriptPrompt] = useState(DEFAULT_SCRIPT_PROMPT);
+  const [customLanguages, setCustomLanguages] = useState<string[]>([]);
+  const [presets, setPresets] = useState<LanguagePreset[]>([]);
 
   // Single tab state
   const [singleText, setSingleText] = useState("");
@@ -87,6 +87,8 @@ export default function TranslatePage() {
           setSelectedLanguages(data.default_languages);
         }
         setScriptPrompt(data.script_prompt || DEFAULT_SCRIPT_PROMPT);
+        setCustomLanguages(data.custom_languages ?? []);
+        setPresets(data.language_presets ?? []);
 
         const keyConfigured =
           (data.preferred_provider === "xai" && !!data.xai_api_key) ||
@@ -110,6 +112,18 @@ export default function TranslatePage() {
         ? prev.filter((c) => c !== code)
         : [...prev, code]
     );
+  }
+
+  function applyPreset(preset: LanguagePreset) {
+    setSelectedLanguages(preset.languages);
+    toast.success(`Applied preset: ${preset.name}`);
+  }
+
+  // Resolve a language ID to a display name (for the API call)
+  function resolveLanguageName(id: string): string {
+    if (id.startsWith("custom:")) return id.replace("custom:", "");
+    const lang = ALL_LANGUAGES.find((l) => l.code === id);
+    return lang?.name ?? id;
   }
 
   // --- Single Translation ---
@@ -215,10 +229,10 @@ export default function TranslatePage() {
     setSingleDone(false);
     setSingleScriptId(null);
 
-    const langs = selectedLanguages.map((code) => {
-      const lang = ALL_LANGUAGES.find((l) => l.code === code);
-      return { code, name: lang?.name ?? code };
-    });
+    const langs = selectedLanguages.map((id) => ({
+      code: id,
+      name: resolveLanguageName(id),
+    }));
 
     try {
       // 1. Create script row via server action
@@ -346,10 +360,10 @@ export default function TranslatePage() {
     setBatchTranslating(true);
     setBatchDone(false);
 
-    const langs = selectedLanguages.map((code) => {
-      const lang = ALL_LANGUAGES.find((l) => l.code === code);
-      return { code, name: lang?.name ?? code };
-    });
+    const langs = selectedLanguages.map((id) => ({
+      code: id,
+      name: resolveLanguageName(id),
+    }));
 
     const initialBatchProg: BatchFileProgress[] = batchFiles.map((f) => ({
       fileName: f.name,
@@ -499,6 +513,35 @@ export default function TranslatePage() {
     return (
       <div className="space-y-4">
         <Label>Target Languages</Label>
+
+        {/* Preset Buttons */}
+        {presets.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Presets
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {presets.map((preset) => {
+                const isActive =
+                  preset.languages.length > 0 &&
+                  preset.languages.every((l) => selectedLanguages.includes(l)) &&
+                  selectedLanguages.every((l) => preset.languages.includes(l));
+                return (
+                  <Button
+                    key={preset.id}
+                    variant={isActive ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => applyPreset(preset)}
+                    className="h-8"
+                  >
+                    {preset.name}
+                  </Button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <div className="space-y-3">
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             YouTube Set
@@ -537,6 +580,30 @@ export default function TranslatePage() {
             ))}
           </div>
         </div>
+        {customLanguages.length > 0 && (
+          <div className="space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Custom
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {customLanguages.map((name) => {
+                const id = `custom:${name}`;
+                return (
+                  <label
+                    key={id}
+                    className="flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm transition-colors hover:bg-accent/50"
+                  >
+                    <Checkbox
+                      checked={selectedLanguages.includes(id)}
+                      onCheckedChange={() => toggleLanguage(id)}
+                    />
+                    {name}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     );
   }

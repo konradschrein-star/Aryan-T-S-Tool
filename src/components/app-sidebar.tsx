@@ -10,6 +10,7 @@ import {
   Settings,
   Shield,
   LogOut,
+  BookOpen,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { Profile } from "@/types";
@@ -26,6 +27,7 @@ const navItems = [
   { href: "/translate", label: "Translate", icon: Languages },
   { href: "/generate", label: "Generate", icon: Wand2 },
   { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/guide", label: "Guide", icon: BookOpen },
 ];
 
 export function AppSidebar({ profile }: { profile: Profile }) {

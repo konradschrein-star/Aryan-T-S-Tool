@@ -10,6 +10,12 @@ export interface Profile {
   created_at: string;
 }
 
+export interface LanguagePreset {
+  id: string;
+  name: string;
+  languages: string[]; // mix of codes ("es") and custom names ("custom:Swahili")
+}
+
 export interface UserSettings {
   user_id: string;
   xai_api_key: string | null;
@@ -20,6 +26,8 @@ export interface UserSettings {
   auto_fill_languages: boolean;
   script_prompt: string;
   thumbnail_prompt: string;
+  custom_languages: string[];
+  language_presets: LanguagePreset[];
 }
 
 export interface Script {
@@ -62,5 +70,5 @@ export interface ThumbnailVariant {
 export interface Language {
   code: string;
   name: string;
-  category: "youtube" | "european";
+  category: "youtube" | "european" | "custom";
 }
