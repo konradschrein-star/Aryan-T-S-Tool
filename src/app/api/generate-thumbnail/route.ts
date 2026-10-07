@@ -36,9 +36,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!settings.googleApiKey) {
+    const googleApiKey = settings.googleApiKey || process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
+    if (!googleApiKey) {
       return NextResponse.json(
-        { error: "No Google API key configured. Please add your key in settings." },
+        { error: "No Google API key configured. Please add your key in settings or set GOOGLE_API_KEY." },
         { status: 400 }
       );
     }
@@ -47,7 +48,7 @@ export async function POST(request: NextRequest) {
       imageBase64,
       mimeType,
       prompt,
-      apiKey: settings.googleApiKey,
+      apiKey: googleApiKey,
     });
 
     return NextResponse.json({ base64: result.base64, mimeType: result.mimeType });
